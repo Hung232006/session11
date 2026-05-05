@@ -1,0 +1,40 @@
+-- Giả sử có bảng accounts và transactions
+-- accounts(id SERIAL PRIMARY KEY, balance NUMERIC)
+-- transactions(id SERIAL PRIMARY KEY, account_id INT, amount NUMERIC, created_at TIMESTAMP)
+
+DO $$
+DECLARE
+    v_account_id INT := 1;       -- ID tài khoản cần rút
+    v_amount NUMERIC := 500;     -- Số tiền muốn rút
+    v_balance NUMERIC;
+BEGIN
+    -- Bắt đầu transaction
+    BEGIN
+        -- Lấy số dư hiện tại
+        SELECT balance INTO v_balance
+        FROM accounts
+        WHERE id = v_account_id
+        FOR UPDATE;  -- Khóa dòng để tránh race condition
+
+        -- Kiểm tra số dư
+        IF v_balance < v_amount THEN
+            RAISE EXCEPTION 'Số dư không đủ';
+        END IF;
+
+        -- Trừ số dư
+        UPDATE accounts
+        SET balance = balance - v_amount
+        WHERE id = v_account_id;
+
+        -- Ghi log giao dịch
+        INSERT INTO transactions(account_id, amount, created_at)
+        VALUES (v_account_id, v_amount, NOW());
+        COMMIT;
+    EXCEPTION
+        WHEN OTHERS THEN
+            -- Nếu có lỗi thì rollback
+            ROLLBACK;
+            RAISE NOTICE 'Giao dịch thất bại, đã rollback';
+    END;
+END;
+$$;
