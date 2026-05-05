@@ -1,0 +1,48 @@
+-- Bắt đầu Transaction
+BEGIN;
+
+-- Khai báo biến để lưu order_id
+DO $$
+DECLARE order_id INT;
+DECLARE stock1 INT;
+DECLARE stock2 INT;
+BEGIN
+    -- Kiểm tra tồn kho sản phẩm 1
+    SELECT quantity INTO stock1 FROM products WHERE id = 1;
+    IF stock1 < 2 THEN
+        RAISE EXCEPTION 'Không đủ hàng cho sản phẩm 1';
+    END IF;
+
+    -- Kiểm tra tồn kho sản phẩm 2
+    SELECT quantity INTO stock2 FROM products WHERE id = 2;
+    IF stock2 < 1 THEN
+        RAISE EXCEPTION 'Không đủ hàng cho sản phẩm 2';
+    END IF;
+
+    -- Giảm tồn kho
+    UPDATE products SET quantity = quantity - 2 WHERE id = 1;
+    UPDATE products SET quantity = quantity - 1 WHERE id = 2;
+
+    -- Tạo đơn hàng
+    INSERT INTO orders (customer_name, total_amount)
+    VALUES ('Nguyen Van A', 0)
+    RETURNING id INTO order_id;
+
+    -- Thêm chi tiết sản phẩm
+    INSERT INTO order_items (order_id, product_id, quantity)
+    VALUES (order_id, 1, 2),
+           (order_id, 2, 1);
+
+    -- Cập nhật tổng tiền
+    UPDATE orders
+    SET total_amount = (
+        SELECT SUM(p.price * oi.quantity)
+        FROM order_items oi
+        JOIN products p ON oi.product_id = p.id
+        WHERE oi.order_id = order_id
+    )
+    WHERE id = order_id;
+END $$;
+
+-- Nếu không có lỗi thì commit
+COMMIT;
